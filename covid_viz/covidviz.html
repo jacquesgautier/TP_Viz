@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr">
+	<head>
+		<meta charset="utf-8">
+		
+		<title>COVID-19 cases evolution</title>
+		
+		<script src="https://d3js.org/d3.v4.js"></script>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+		  
+		<style type="text/css">
+			div.tooltip {
+				position: absolute;
+				text-align: center;
+				color: black;
+				width: 275px;
+				height: 45px;
+				padding: 2px;
+				font: 12px sans-serif;
+				background: grey;
+				border: 0px;
+				border-radius: 8px;
+				pointer-events: none;
+			}
+			
+			.q0-9 {fill: #ffffcc;}
+			.q1-9 {fill: #ffeda0;}
+			.q2-9 {fill: #fed976;}
+			.q3-9 {fill: #feb24c;}
+			.q4-9 {fill: #fd8d3c;}
+			.q5-9 {fill: #fc4e2a;}
+			.q6-9 {fill: #e31a1c;}
+			.q7-9 {fill: #bd0026;}
+			.q8-9 {fill: #800026;}
+			
+			#svg {
+				display: block;
+				margin: auto;
+			}
+		</style>
+	</head>
+ 
+	<body>
+		
+		<div id="map"></div>
+		<div id="time_div">
+		</div>
+		
+		
+	</body>
+</html>
+<script type="text/javascript">
+
+	//time code used to get the correct column in json file
+	var current_time_code;
+	current_time_code = 'cov_03_01';
+
+	//creation of the date selector list
+	d3.csv('liste_date.csv', function (d) {
+	    var html_content = "<select name='date_selector' id='date_selector'>";
+		var first = true;
+		d.forEach(function (d,i) {
+			if(first == true){
+				html_content = html_content + "<option value=" + d.code + " selected>" + d.date + "</option>"
+				first = false;
+			} else {
+				html_content = html_content + "<option value=" + d.code + ">" + d.date + "</option>"
+			}
+		});
+		html_content = html_content + "</select>"
+		$("#time_div").html(html_content);
+	})
+	
+	//determining the data classification process in order to affect the different color
+	var quantile = d3.scaleQuantile()
+    .domain([0, 25683])
+    .range(d3.range(9));
+	
+	
+	/*
+		----------------------creation of the map---------------
+	*/
+	
+	const width = 750, height = 550;
+	const path = d3.geoPath();
+	const projection = d3.geoConicConformal() // Lambert-93
+		.center([2.454071, 46.279229]) // Center on France
+		.scale(2600)
+		.translate([width / 2 - 50, height / 2]);
+
+	path.projection(projection);
+	
+	//creation of the map svg object
+	const svg = d3.select('#map').append("svg")
+		.attr("id", "svg")
+		.attr("width", width)
+		.attr("height", height);
+
+
+	const deps = svg.append("g");
+	
+	var div = d3.select("body").append("div")   
+    .attr("class", "tooltip")               
+    .style("opacity", 0);
+	
+	//loading json object
+	d3.json('covid_france_wgs.geojson',function(geojson) {
+    deps.selectAll("path")
+        .data(geojson.features)
+        .enter()
+        .append("path")
+        .attr("d", path)
+		.attr('id', d => "d" + d.properties.Code)
+		//determining object class according to the data value at the current time. Object's color is determined by its class in the CSS
+		.attr("class", d => "department q" + quantile(+d.properties[current_time_code]) + "-9")
+		.on("mouseover", function(d) {
+            div.transition()        
+                .duration(200)
+                .style("opacity", .9)   
+            div.html("Code : " + d.properties.Code + "<br/>"
+                  +  "Dep : " + d.properties.Province_S + "<br/>"
+                  +  "Cases : " + d.properties[current_time_code])  
+                .style("left", (d3.event.pageX + 30) + "px")     
+                .style("top", (d3.event.pageY - 30) + "px")
+				
+        })
+        .on("mouseout", function(d) {
+            div.style("opacity", 0);
+            div.html("")
+                .style("left", "-500px")
+                .style("top", "-500px");
+        });
+		
+	/*
+		----------------------creation of the legend---------------
+	*/
+	
+	var legend = svg.append('g')
+    .attr('transform', 'translate(525, 150)')
+    .attr('id', 'legend');
+	
+	legend.selectAll('.colorbar')
+    .data(d3.range(9))
+    .enter().append('svg:rect')
+        .attr('y', d => d * 20 + 'px')
+        .attr('height', '20px')
+        .attr('width', '20px')
+        .attr('x', '0px')
+        .attr("class", d => "q" + d + "-9")
+		
+	var legendScale = d3.scaleLinear()
+		.domain([0, 25683])
+		.range([0, 9 * 20]);
+	
+	var legendAxis = svg.append("g")
+    .attr('transform', 'translate(550, 150)')
+    .call(d3.axisRight(legendScale).ticks(6));
+
+	
+	
+	/*
+		----------------------map update when the current date is change---------------
+	*/
+	d3.select("#date_selector").on("change", function() {
+		current_time_code = this.value;
+		d3.json('covid_france_wgs.geojson',function(geojson) {
+			geojson.features.forEach(function(e,i) {
+				d3.select("#d" + e.properties.Code).attr("class", "department department q1-9)
+			});
+		});
+	});
+		
+});
+</script>
+
